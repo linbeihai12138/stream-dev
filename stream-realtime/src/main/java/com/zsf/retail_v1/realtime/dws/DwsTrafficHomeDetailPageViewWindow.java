@@ -141,7 +141,7 @@ public class DwsTrafficHomeDetailPageViewWindow {
                     }
                 }
         );
-        reduceDS.print();
+//        reduceDS.print();
         //TODO 8.将聚合的结果写到Doris
 
 //        reduceDS

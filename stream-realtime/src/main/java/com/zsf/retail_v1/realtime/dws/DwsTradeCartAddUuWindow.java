@@ -141,7 +141,7 @@ public class DwsTradeCartAddUuWindow {
                 }
         );
         //TODO 7.将聚合的结果写到Doris
-        aggregateDS.print();
+//        aggregateDS.print();
 //        aggregateDS
 //                .map(o->JSON.toJSONString(o))
 //                .sinkTo(FlinkSinkUtil.getDorisSink("dws_trade_cart_add_uu_window"));

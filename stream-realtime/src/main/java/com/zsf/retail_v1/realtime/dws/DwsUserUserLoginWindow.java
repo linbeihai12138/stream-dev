@@ -149,7 +149,7 @@ public class DwsUserUserLoginWindow {
                 }
         );
         //TODO 8.将聚合结果写到Doris
-        reduceDS.print();
+//        reduceDS.print();
         SingleOutputStreamOperator<String> map = reduceDS.map(JSON::toJSONString);
 //        map.sinkTo(SinkDoris.getDorisSink("sx_001","dws_user_user_login_window"));
         env.execute();

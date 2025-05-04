@@ -215,7 +215,7 @@ public class DwsTradeProvinceOrderWindow {
                     }
                 }
         );
-//       withProvinceDS.print();
+       withProvinceDS.print();
         //TODO 10.将关联的结果写到Doris中
 //        SingleOutputStreamOperator<String> map1 = withProvinceDS.map(o -> JSON.toJSONString(o));
 //       map1.sinkTo(SinkDoris.getDorisSink("sx_001","dws_trade_province_order_window"));
