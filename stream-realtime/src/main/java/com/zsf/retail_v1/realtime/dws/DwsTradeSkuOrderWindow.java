@@ -379,7 +379,7 @@ public class DwsTradeSkuOrderWindow {
                         return tradeSkuOrderBean;
                     }
                 });
-        withCategory1foDS.print();
+//        withCategory1foDS.print();
         //TODO 15.将关联的结果写到Doris表中
 //       withCategory1foDS
 //                .map(o->JSON.toJSONString(o))
