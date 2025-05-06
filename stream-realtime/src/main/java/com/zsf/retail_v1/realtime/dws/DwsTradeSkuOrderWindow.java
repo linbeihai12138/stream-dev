@@ -7,6 +7,7 @@ import com.zsf.realtime.common.constant.Constant;
 import com.zsf.realtime.common.util.DateFormatUtil;
 import com.zsf.realtime.common.util.HBaseUtil;
 import com.zsf.realtime.common.util.KafkaUtil;
+import com.zsf.realtime.common.util.SinkDoris;
 import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
@@ -381,10 +382,8 @@ public class DwsTradeSkuOrderWindow {
                 });
 //        withCategory1foDS.print();
         //TODO 15.将关联的结果写到Doris表中
-//       withCategory1foDS
-//                .map(o->JSON.toJSONString(o))
-//                .sinkTo(FlinkSinkUtil.getDorisSink("dws_trade_sku_order_window"));
-
+//        SingleOutputStreamOperator<String> map1 = withCategory1foDS.map(JSON::toJSONString);
+//        map1.sinkTo(SinkDoris.getDorisSink("sx_001","dws_trade_sku_order_window"));
 
         env.execute("dws010");
     }

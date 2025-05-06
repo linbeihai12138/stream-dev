@@ -5,6 +5,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.zsf.realtime.common.bean.TrafficHomeDetailPageViewBean;
 import com.zsf.realtime.common.util.DateFormatUtil;
 import com.zsf.realtime.common.util.KafkaUtil;
+import com.zsf.realtime.common.util.SinkDoris;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
@@ -141,7 +142,7 @@ public class DwsTrafficHomeDetailPageViewWindow {
                     }
                 }
         );
-//        reduceDS.print();
+        reduceDS.print();
         //TODO 8.将聚合的结果写到Doris
 
 //        reduceDS

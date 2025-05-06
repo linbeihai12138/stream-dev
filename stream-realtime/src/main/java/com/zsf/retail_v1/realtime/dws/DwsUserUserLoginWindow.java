@@ -122,7 +122,7 @@ public class DwsUserUserLoginWindow {
         );
 //        beanDS.print();
         //TODO 6.开窗
-        AllWindowedStream<UserLoginBean, TimeWindow> windowDS = beanDS.windowAll(TumblingEventTimeWindows.of(Time.seconds(10)));
+        AllWindowedStream<UserLoginBean, TimeWindow> windowDS = beanDS.windowAll(TumblingEventTimeWindows.of(Time.seconds(1)));
 
         //TODO 7.聚合
         SingleOutputStreamOperator<UserLoginBean> reduceDS = windowDS.reduce(
@@ -149,8 +149,8 @@ public class DwsUserUserLoginWindow {
                 }
         );
         //TODO 8.将聚合结果写到Doris
-//        reduceDS.print();
-        SingleOutputStreamOperator<String> map = reduceDS.map(JSON::toJSONString);
+        reduceDS.print();
+//        SingleOutputStreamOperator<String> map = reduceDS.map(JSON::toJSONString);
 //        map.sinkTo(SinkDoris.getDorisSink("sx_001","dws_user_user_login_window"));
         env.execute();
     }

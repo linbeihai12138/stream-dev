@@ -5,6 +5,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.zsf.realtime.common.bean.TrafficPageViewBean;
 import com.zsf.realtime.common.util.DateFormatUtil;
 import com.zsf.realtime.common.util.KafkaUtil;
+import com.zsf.realtime.common.util.SinkDoris;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
@@ -187,8 +188,7 @@ public class DwsTrafficVcChArIsNewPageViewWindow {
         //{"ar":"30","ch":"oppo","cur_date":"2025-04-22","durSum":30516,"edt":"2025-04-22 09:50:30","isNew":"1","pvCt":3,
         // "stt":"2025-04-22 09:50:20","svCt":2,"uvCt":1,"vc":"v2.1.132"}
         SingleOutputStreamOperator<String> map = reduceDS.map(JSON::toJSONString);
-//        map.print();
-//        map.sinkTo(SinkDoris.getDorisSink("sx_001","dws_traffic_vcchar_isnew_pageviewwindow1"));
+        map.sinkTo(SinkDoris.getDorisSink("sx_001","dws_traffic_vcchar_isnew_pageviewwindow1"));
 
         env.execute();
     }

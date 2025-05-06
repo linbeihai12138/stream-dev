@@ -25,16 +25,16 @@ public class DwsTrafficSourceKeywordPageViewWindow {
         StreamTableEnvironment tableEnv = StreamTableEnvironment.create(env);
 
 
-        env.enableCheckpointing(60000);
-        CheckpointConfig checkpointConfig = env.getCheckpointConfig();
-// 精确一次语义
-        checkpointConfig.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
-// 检查点超时时间（2分钟）
-        checkpointConfig.setCheckpointTimeout(120000);
-// 最小间隔：500毫秒（防止检查点过于频繁）
-        checkpointConfig.setMinPauseBetweenCheckpoints(500);
-// 最大并发检查点数
-        checkpointConfig.setMaxConcurrentCheckpoints(1);
+        env.enableCheckpointing(6000);
+//        CheckpointConfig checkpointConfig = env.getCheckpointConfig();
+//// 精确一次语义
+//        checkpointConfig.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+//// 检查点超时时间（2分钟）
+//        checkpointConfig.setCheckpointTimeout(120000);
+//// 最小间隔：500毫秒（防止检查点过于频繁）
+//        checkpointConfig.setMinPauseBetweenCheckpoints(500);
+//// 最大并发检查点数
+//        checkpointConfig.setMaxConcurrentCheckpoints(1);
 
         //TODO 注册自定义函数到表执行环境中
         tableEnv.createTemporarySystemFunction("ik_analyze", KeywordUDTF.class);
@@ -46,7 +46,7 @@ public class DwsTrafficSourceKeywordPageViewWindow {
                 "     et as TO_TIMESTAMP_LTZ(ts, 3),\n" +
                 "     WATERMARK FOR et AS et - INTERVAL '3' SECOND\n" +
                 ")" + SQLUtil.getKafkaDDL(Constant.TOPIC_DWD_TRAFFIC_PAGE,"dws_traffic_source_keyword_page_view_window"));
-        //tableEnv.executeSql("select * from page_log").print();
+//        tableEnv.executeSql("select * from page_log").print();
 
         //TODO 过滤出搜索行为
         Table searchTable = tableEnv.sqlQuery("select \n" +

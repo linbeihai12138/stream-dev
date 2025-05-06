@@ -5,6 +5,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.zsf.realtime.common.constant.Constant;
 import com.zsf.realtime.common.util.DateFormatUtil;
 import com.zsf.realtime.common.util.HBaseUtil;
+import com.zsf.realtime.common.util.KafkaUtil;
 import com.zsf.realtime.common.util.KafkaUtils;
 import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
@@ -53,25 +54,22 @@ public class DwsTradeProvinceOrderWindow {
         // 并行度，
         env.setParallelism(4);
 
-        env.enableCheckpointing(60000);
-        CheckpointConfig checkpointConfig = env.getCheckpointConfig();
-// 精确一次语义
-        checkpointConfig.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
-// 检查点超时时间（2分钟）
-        checkpointConfig.setCheckpointTimeout(120000);
-// 最小间隔：500毫秒（防止检查点过于频繁）
-        checkpointConfig.setMinPauseBetweenCheckpoints(500);
-// 最大并发检查点数
-        checkpointConfig.setMaxConcurrentCheckpoints(1);
+//        env.enableCheckpointing(60000);
+//        CheckpointConfig checkpointConfig = env.getCheckpointConfig();
+//// 精确一次语义
+//        checkpointConfig.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+//// 检查点超时时间（2分钟）
+//        checkpointConfig.setCheckpointTimeout(120000);
+//// 最小间隔：500毫秒（防止检查点过于频繁）
+//        checkpointConfig.setMinPauseBetweenCheckpoints(500);
+//// 最大并发检查点数
+//        checkpointConfig.setMaxConcurrentCheckpoints(1);
 
-        OffsetsInitializer offset = OffsetsInitializer.earliest();
-        KafkaSource<String> source = KafkaUtils.buildKafkaSource("dwd_trade_order_detail", "groupId002", offset);
 
-        DataStreamSource<String> kafkaStrDS
-                = env.fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka_Source");
-//        kafkaSource.print();
+        DataStreamSource<String> source = KafkaUtil.getKafkaSource(env, "groupId", "dwd_trade_order_detail");
+
         //TODO 1.过滤空消息  并对流中数据进行类型转换    jsonStr->jsonObj
-        SingleOutputStreamOperator<JSONObject> jsonObjDS = kafkaStrDS.process(
+        SingleOutputStreamOperator<JSONObject> jsonObjDS = source.process(
                 new ProcessFunction<String, JSONObject>() {
                     @Override
                     public void processElement(String jsonStr, ProcessFunction<String, JSONObject>.Context ctx, Collector<JSONObject> out) throws Exception {
@@ -170,7 +168,8 @@ public class DwsTradeProvinceOrderWindow {
 //                        System.out.println("Reducing " + value1 + " and " + value2);
                         return value1;
                     }
-                },
+                }
+                ,
                 new WindowFunction<TradeProvinceOrderBean, TradeProvinceOrderBean, String, TimeWindow>() {
                     @Override
                     public void apply(String s, TimeWindow window, Iterable<TradeProvinceOrderBean> input, Collector<TradeProvinceOrderBean> out) throws Exception {
@@ -186,7 +185,7 @@ public class DwsTradeProvinceOrderWindow {
                     }
                 }
         );
-        reduceDS.print();
+//        reduceDS.print();
         //TODO 9.关联省份维度
         SingleOutputStreamOperator<TradeProvinceOrderBean> withProvinceDS = reduceDS.map(
                 new RichMapFunction<TradeProvinceOrderBean, TradeProvinceOrderBean>() {

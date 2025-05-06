@@ -5,7 +5,9 @@ import com.alibaba.fastjson.JSONObject;
 import com.ververica.cdc.connectors.mysql.source.MySqlSource;
 import com.ververica.cdc.connectors.mysql.table.StartupOptions;
 import com.ververica.cdc.debezium.JsonDebeziumDeserializationSchema;
+import com.zsf.realtime.common.util.FlinkSinkUtil;
 import com.zsf.realtime.common.util.KafkaUtil;
+import com.zsf.realtime.common.util.KafkaUtils;
 import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.FilterFunction;
@@ -118,7 +120,7 @@ public class DwdBaseDb {
 
         splitDS.print("1-->");
 
-        //splitDS.sinkTo(FlinkSinkUtil.getKafkaSink());
+        splitDS.map(Tuple2::toString).addSink(KafkaUtil.getKafkaSink("topicDb2hbaseDim"));
         env.execute();
     }
 }
