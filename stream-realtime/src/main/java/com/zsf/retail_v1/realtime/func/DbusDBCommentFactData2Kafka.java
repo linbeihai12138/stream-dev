@@ -38,7 +38,7 @@ public class DbusDBCommentFactData2Kafka {
     @SneakyThrows
     public static void main(String[] args) {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(4);
+        env.setParallelism(1);
 
         SingleOutputStreamOperator<String> kafkaCdcDbSource = env.fromSource(
                 //读取kafka数据

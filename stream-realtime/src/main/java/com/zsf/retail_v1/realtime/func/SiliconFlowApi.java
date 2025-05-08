@@ -20,7 +20,7 @@ public class SiliconFlowApi {
     private static final OkHttpClient CLIENT = new OkHttpClient.Builder()
             .connectionPool(CONNECTION_POOL)
             .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .readTimeout( 30,TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build();
 
