@@ -4,7 +4,7 @@ import static com.zsf.retail_v1.realtime.func.SiliconFlowApi.generateBadReview;
 
 /**
  * @Package com.stream.utils.CommonGenerateTempLate
- * @Author zhou.han
+ * @Author zhao.shuai.fei
  * @Date 2025/3/16 19:43
  * @description: TempLate
  */

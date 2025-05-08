@@ -7,6 +7,12 @@ import okhttp3.*;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * @Package com.stream.utils.SensitiveWordsUtils
+ * @Author zhao.shuai.fei
+ * @Date 2025/5/8 11:58
+ * @description: Ai模型接口
+ */
 public class SiliconFlowApi {
 
 
@@ -15,6 +21,7 @@ public class SiliconFlowApi {
     }
 
     private static final ConnectionPool CONNECTION_POOL = new ConnectionPool(200, 5, TimeUnit.MINUTES);
+//    private static final String SILICON_API_ADDR = "https://api.siliconflow.cn/v1/chat/completions";
     private static final String SILICON_API_ADDR = "https://api.siliconflow.cn/v1/chat/completions";
     private static final String SILICON_API_TOKEN = "sk-todfyfelrxdtkyhmjnunyfezdcywpageajhuxoezdevayoew";
     private static final OkHttpClient CLIENT = new OkHttpClient.Builder()
@@ -34,7 +41,7 @@ public class SiliconFlowApi {
                             MediaType.parse("application/json; charset=utf-8"),
                             requestBody.toJSONString()
                                         ))
-                    .addHeader("Authorization", "Bearer " + apiToken)
+                    .addHeader("Authorization", "Bearer " + "sk-todfyfelrxdtkyhmjnunyfezdcywpageajhuxoezdevayoew")
                     .addHeader("Content-Type", "application/json")
                     .build();
 
@@ -55,9 +62,10 @@ public class SiliconFlowApi {
 
     private static JSONObject buildRequestBody(String prompt) {
         return new JSONObject()
-                .fluentPut("model", "Pro/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
+//                .fluentPut("model", "Pro/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
+                .fluentPut("model", "Qwen/Qwen2-7B-Instruct")
                 .fluentPut("stream", false)
-                .fluentPut("max_tokens", 512)
+                .fluentPut("max_tokens", 1024)
                 .fluentPut("temperature", 0.7)
                 .fluentPut("top_p", 0.7)
                 .fluentPut("top_k", 50)

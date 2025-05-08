@@ -9,11 +9,12 @@ import java.util.Random;
 
 /**
  * @Package com.stream.utils.SensitiveWordsUtils
- * @Author zhou.han
+ * @Author zhao.shuai.fei
  * @Date 2025/3/16 21:58
  * @description: sensitive words
  */
 public class SensitiveWordsUtils {
+
 
 
     //从指定文件中读取敏感词列表，并将每行内容作为一个敏感词添加到 ArrayList 中。

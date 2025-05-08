@@ -2,15 +2,20 @@ package com.zsf.retail_v1.realtime.func;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.zsf.realtime.common.util.KafkaUtil;
+import com.zsf.realtime.common.utils.DateTimeUtils;
 import com.zsf.realtime.common.utils.SensitiveWordsUtils;
 import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.RichMapFunction;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import com.zsf.realtime.common.util.KafkaUtils;
@@ -38,7 +43,7 @@ public class DbusDBCommentFactData2Kafka {
     @SneakyThrows
     public static void main(String[] args) {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);
+        env.setParallelism(10);
 
         SingleOutputStreamOperator<String> kafkaCdcDbSource = env.fromSource(
                 //读取kafka数据
@@ -152,7 +157,7 @@ public class DbusDBCommentFactData2Kafka {
                 .process(new IntervalJoinOrderCommentAndOrderInfoFunc())
                 .uid("interval_join_order_comment_and_order_info_func").name("interval_join_order_comment_and_order_info_func");
 
-        // 通过AI 生成评论数据，`Deepseek 7B` 模型即可
+        // 通过AI 生成评论数据，` 7B 类型的` 模型即可
         SingleOutputStreamOperator<JSONObject> supplementDataMap = orderMsgAllDs.map(new RichMapFunction<JSONObject, JSONObject>() {
             @Override
             public JSONObject map(JSONObject jsonObject) {
@@ -161,7 +166,39 @@ public class DbusDBCommentFactData2Kafka {
             }
         }).uid("map-generate_comment").name("map-generate_comment");
 
-        supplementDataMap.print();
+        //对输入数据流中的 JSONObject 元素进行处理，以一定概率为 commentTxt 字段添加敏感词汇
+        SingleOutputStreamOperator<JSONObject> suppleMapDs = supplementDataMap.map(new RichMapFunction<JSONObject, JSONObject>() {
+            private transient Random random;
+
+            @Override
+            public void open(Configuration parameters){
+                //随机数生成器
+                random = new Random();
+            }
+
+            @Override
+            public JSONObject map(JSONObject jsonObject){
+                if (random.nextDouble() < 0.2) {
+                    //从敏感词词库获取一个敏感词，添加到json中
+                    jsonObject.put("commentTxt", jsonObject.getString("commentTxt") + "," + SensitiveWordsUtils.getRandomElement(sensitiveWordsLists));
+                    System.err.println("change commentTxt: " + jsonObject);
+                }
+                return jsonObject;
+            }
+        }).uid("map-sensitive-words").name("map-sensitive-words");
+
+        //添加ds分区字段，方便后续分区
+        SingleOutputStreamOperator<JSONObject> suppleTimeFieldDs = suppleMapDs.map(new RichMapFunction<JSONObject, JSONObject>() {
+            @Override
+            public JSONObject map(JSONObject jsonObject){
+                jsonObject.put("ds", DateTimeUtils.format(new Date(jsonObject.getLong("ts_ms")), "yyyyMMdd"));
+                return jsonObject;
+            }
+        }).uid("add json ds").name("add json ds");
+
+        //写入kafka 报错
+//        SingleOutputStreamOperator<String> mapped = suppleTimeFieldDs.map(js -> js.toJSONString());
+//        mapped.addSink(KafkaUtil.getKafkaSink("topic_db_sw"));
 
         env.execute();
 
