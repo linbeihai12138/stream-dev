@@ -197,8 +197,8 @@ public class DbusDBCommentFactData2Kafka {
         }).uid("add json ds").name("add json ds");
 
         //写入kafka 报错
-//        SingleOutputStreamOperator<String> mapped = suppleTimeFieldDs.map(js -> js.toJSONString());
-//        mapped.addSink(KafkaUtil.getKafkaSink("topic_db_sw"));
+        SingleOutputStreamOperator<String> mapped = suppleTimeFieldDs.map(js -> js.toJSONString());
+        mapped.addSink(KafkaUtil.getKafkaSink("topic_db_sw"));
 
         env.execute();
 

@@ -66,7 +66,7 @@ public class DwsTradeProvinceOrderWindow {
 //        checkpointConfig.setMaxConcurrentCheckpoints(1);
 
 
-        DataStreamSource<String> source = KafkaUtil.getKafkaSource(env, "groupId", "dwd_trade_order_detail");
+        DataStreamSource<String> source = KafkaUtil.getKafkaSource(env, "dwd_trade_order_detail", "dwd_trade_order_detail");
 
         //TODO 1.过滤空消息  并对流中数据进行类型转换    jsonStr->jsonObj
         SingleOutputStreamOperator<JSONObject> jsonObjDS = source.process(
@@ -86,7 +86,7 @@ public class DwsTradeProvinceOrderWindow {
         //TODO 2.按照唯一键(订单明细的id)进行分组
         KeyedStream<JSONObject, String> orderDetailIdKeyedDS = jsonObjDS.keyBy(jsonObj -> jsonObj.getString("id"));
 
-        //TODO 3.去重
+        //TODO 3.去重:带有状态的流处理逻辑，对输入的 JSONObject 数据进行处理
         SingleOutputStreamOperator<JSONObject> distinctDS = orderDetailIdKeyedDS.process(
                 new KeyedProcessFunction<String, JSONObject, JSONObject>() {
                     private ValueState<JSONObject> lastJsonObjState;

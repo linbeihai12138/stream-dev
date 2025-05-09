@@ -5,8 +5,10 @@ import com.alibaba.fastjson.JSONObject;
 import com.github.houbb.sensitive.word.core.SensitiveWordHelper;
 import com.zsf.realtime.common.func.FilterBloomDeduplicatorFunc;
 import com.zsf.realtime.common.util.KafkaUtil;
+import com.zsf.realtime.common.util.SinkDoris;
 import lombok.SneakyThrows;
 import org.apache.flink.api.common.functions.RichMapFunction;
+import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -24,6 +26,11 @@ public class DbusBanBlackListUserInfo2Kafka {
     public static void main(String[] args) {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(10);
+
+        //启用检查点
+        env.enableCheckpointing(5000);
+        //设置检查点模式
+        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
 
         DataStreamSource<String> kafkaSource = KafkaUtil.getKafkaSource(env, "topic_db_sw", "groupId");
 
@@ -50,7 +57,7 @@ public class DbusBanBlackListUserInfo2Kafka {
                     List<String> msgSen = SensitiveWordHelper.findAll(msg);
                     //更新 is_violation 和 violation_msg 字段
                     if (msgSen.size() > 0) {
-                        jsonObject.put("is_violation", "P1");
+                        jsonObject.put("violation_grade", "P1");
                         jsonObject.put("violation_msg", String.join(", ", msgSen));
                     }
                 }
@@ -60,7 +67,8 @@ public class DbusBanBlackListUserInfo2Kafka {
 
         //写入kafka
         SingleOutputStreamOperator<String> mapped = secondCheckMap.map(s -> s.toJSONString());
-        mapped.addSink(KafkaUtil.getKafkaSink("topic_db_blacklist"));
+//        mapped.addSink(KafkaUtil.getKafkaSink("topic_db_blacklist"));
+        mapped.sinkTo(SinkDoris.getDorisSink("sx_001","black_list_table"));
 
         env.execute();
     }
