@@ -70,7 +70,7 @@ public class DbusDBCommentFactData2Kafka {
                 "kafka_cdc_db_source"
         ).uid("kafka_db_source").name("kafka_db_source");
 
-        // 订单主表
+        // 订单主表 订单表进行过滤
         DataStream<JSONObject> filteredOrderInfoStream = kafkaCdcDbSource
                 .map(JSON::parseObject)
                 .filter(json -> json.getJSONObject("source").getString("table").equals("order_info"))
