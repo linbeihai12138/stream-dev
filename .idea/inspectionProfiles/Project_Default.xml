@@ -4,5 +4,21 @@
     <inspection_tool class="JavadocDeclaration" enabled="true" level="WARNING" enabled_by_default="true">
       <option name="ADDITIONAL_TAGS" value="Package,Author,Date,description:,date" />
     </inspection_tool>
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="8">
+            <item index="0" class="java.lang.String" itemvalue="Deprecated" />
+            <item index="1" class="java.lang.String" itemvalue="fabric" />
+            <item index="2" class="java.lang.String" itemvalue="certifi" />
+            <item index="3" class="java.lang.String" itemvalue="charset-normalizer" />
+            <item index="4" class="java.lang.String" itemvalue="hdfs" />
+            <item index="5" class="java.lang.String" itemvalue="invoke" />
+            <item index="6" class="java.lang.String" itemvalue="redis" />
+            <item index="7" class="java.lang.String" itemvalue="bcrypt" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
   </profile>
 </component>

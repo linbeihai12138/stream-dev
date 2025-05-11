@@ -10,7 +10,7 @@ DB_CONFIG = {
     'port': 3306,
     'user': 'root',
     'password': 'root',
-    'database': 'dev'
+    'database': 'sx_003'
 }
 
 engine = create_engine(
