@@ -1,4 +1,4 @@
-package com.zsf.retail_v1.realtime.dim;
+package com.zsf.retail_v1.realtime.damoplate;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
@@ -8,6 +8,7 @@ import com.ververica.cdc.debezium.JsonDebeziumDeserializationSchema;
 import com.zsf.realtime.common.constant.Constant;
 import com.zsf.realtime.common.util.HbaseUtils;
 import com.zsf.realtime.common.util.KafkaUtil;
+import com.zsf.retail_v1.realtime.dim.TableProcessFunction;
 import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.MapFunction;
@@ -26,12 +27,59 @@ import org.apache.hadoop.hbase.client.BufferedMutatorParams;
 import java.util.*;
 
 /**
- * @Package com.zsf.retail_v1.realtime.dim.DimKafka2Hbase
+ * @Package com.zsf.retail_v1.realtime.damoplate.kafka2hbase
  * @Author zhao.shuai.fei
- * @Date 2025/4/23 18:57
- * @description:
+ * @Date 2025/5/12 13:45
+ * @description: 将维度数据写入到kafka
  */
-public class DimKafka2Hbase {
+public class kafka2hbase {
+    private static void deleteNotNeedColumns(JSONObject dataJsonObj, String sinkColumns) {
+        List<String> columnList = Arrays.asList(sinkColumns.split(","));
+
+        Set<Map.Entry<String, Object>> entrySet = dataJsonObj.entrySet();
+
+        entrySet.removeIf(entry-> !columnList.contains(entry.getKey()));
+
+    }
+    private static SingleOutputStreamOperator<JSONObject> createHBaseTable(SingleOutputStreamOperator<JSONObject> tpDS){
+        tpDS = tpDS.map(new MapFunction<JSONObject, JSONObject>() {
+            @Override
+            public JSONObject map(JSONObject tp) throws Exception {
+                HbaseUtils hbaseUtils = new HbaseUtils("cdh01,cdh02,cdh03");
+
+                if (hbaseUtils.isConnect()) {
+                    System.out.println("HBase 连接正常");
+                } else {
+                    System.out.println("HBase 连接失败");
+                }
+
+                //获取配置表：操作类型
+                String op = tp.getString("op");
+
+                //获取配置表：hbase维度表表名
+                String sinkTable = tp.getString("sink_table");
+                //获取配置表：hbase维度表表中列祖
+                String[] sinkFamily = tp.getString("sink_family").split(",");
+
+                if ("d".equals(op)){
+                    //从配置表：删除一条数据，hbase将对应的表删除
+                    boolean tableDeleted = hbaseUtils.deleteTable(sinkTable);
+
+                } else if("r".equals(op)||"c".equals(op)){
+                    //从配置表：添加一条数据，hbase将对应的表添加
+                    boolean tableCreated = hbaseUtils.createTable("sx_003", sinkTable, sinkFamily);
+
+                }else {
+                    //从配置表：修改一条数据，hbase将对应的表修改：先删除后添加
+                    boolean tableCreated = hbaseUtils.createTable("sx_003", sinkTable, sinkFamily);
+                    boolean tableDeleted = hbaseUtils.deleteTable(sinkTable);
+
+                }
+                return tp;
+            }
+        }).setParallelism(1);
+        return tpDS;
+    }
     @SneakyThrows
     public static void main(String[] args) {
         // 环境准备：流处理，
@@ -39,21 +87,19 @@ public class DimKafka2Hbase {
         // 并行度，
         env.setParallelism(4);
 
-        DataStreamSource<String> dbStrDS = KafkaUtil.getKafkaSource(env, "topic_db", "groupId001");
+        // 业务数据
+        DataStreamSource<String> dbSource = KafkaUtil.getKafkaSource(env, "topic_db_001", "groupId001");
 
-        // 对业务流中数据类型进行转换 jsonstr -->  jsonObject
-        SingleOutputStreamOperator<JSONObject> dbObjDS = dbStrDS.map(JSON::parseObject);
-//        dbObjDS.print();
-
-        // 根据配置表中的配置信息到hbase 中执行建表或者删除表操作
+        SingleOutputStreamOperator<JSONObject> dbJsonDS = dbSource.map(JSONObject::parseObject);
+        // 读取维度表信息
         Properties properties = new Properties();
         properties.setProperty("decimal.handling.mode","double");
         properties.setProperty("time.precision.mode","connect");
         MySqlSource<String> mySqlSource = MySqlSource.<String>builder()
                 .hostname("cdh03")
                 .port(3306)
-                .databaseList("sx_002_v2") // 设置捕获的数据库， 如果需要同步整个数据库，请将 tableList 设置为 ".*".
-                .tableList("sx_002_v2.table_process_dim") // 设置捕获的表
+                .databaseList("sx_004_v2") // 设置捕获的数据库， 如果需要同步整个数据库，请将 tableList 设置为 ".*".
+                .tableList("sx_004_v2.*") // 设置捕获的表
                 .username("root")
                 .password("root")
                 .debeziumProperties(properties)
@@ -64,8 +110,7 @@ public class DimKafka2Hbase {
 
         DataStreamSource<String> dbDimStrDS = env
                 .fromSource(mySqlSource, WatermarkStrategy.noWatermarks(), "MySQL Source");
-//        dbDimStrDS.print("sx_002_v2--->");
-        
+
         //维度信息过滤
         SingleOutputStreamOperator<JSONObject> dbDimTabDS = dbDimStrDS.map(new MapFunction<String, JSONObject>() {
             @Override
@@ -85,7 +130,6 @@ public class DimKafka2Hbase {
                 return after;
             }
         });
-//        dbDimTabDS.print();
 
 //        调用方法 把维度表信息写入到 hbase
 //        createHBaseTable(dbDimTabDS);
@@ -94,11 +138,9 @@ public class DimKafka2Hbase {
 
         BroadcastStream<JSONObject> broadcast = dbDimTabDS.broadcast(mapStateDescriptor);
         //主流connect广播流
-        BroadcastConnectedStream<JSONObject, JSONObject> connect = dbObjDS.connect(broadcast);
+        BroadcastConnectedStream<JSONObject, JSONObject> connect = dbJsonDS.connect(broadcast);
 
         SingleOutputStreamOperator<Tuple2<JSONObject, JSONObject>> dimDS = connect.process(new TableProcessFunction(mapStateDescriptor));
-
-        dimDS.print("1-->");
 
         dimDS.addSink(new SinkFunction<Tuple2<JSONObject, JSONObject>>() {
             @Override
@@ -130,7 +172,7 @@ public class DimKafka2Hbase {
                     String sinkFamily = jsonObject.getString("sinkFamily");
 //                    HbaseUtils.putRow(hbaseConn,Constant.HBASE_NAMESPACE,sinkTable,rowKey,sinkFamily,jsonObj);
                     // 2. 配置要写入的表名、行键和数据
-                    String tableName = "sx_002:"+sinkTable;
+                    String tableName = "sx_003:"+sinkTable;
 
                     // 3. 创建 BufferedMutator，用于批量写入数据
                     BufferedMutatorParams params = new BufferedMutatorParams(TableName.valueOf(tableName));
@@ -151,54 +193,9 @@ public class DimKafka2Hbase {
 
             }
         });
-        
+
+
         env.execute();
     }
-    private static SingleOutputStreamOperator<JSONObject> createHBaseTable(SingleOutputStreamOperator<JSONObject> tpDS){
-        tpDS = tpDS.map(new MapFunction<JSONObject, JSONObject>() {
-            @Override
-            public JSONObject map(JSONObject tp) throws Exception {
-                HbaseUtils hbaseUtils = new HbaseUtils("cdh01,cdh02,cdh03");
 
-                if (hbaseUtils.isConnect()) {
-                    System.out.println("HBase 连接正常");
-                } else {
-                    System.out.println("HBase 连接失败");
-                }
-
-                //获取配置表：操作类型
-                String op = tp.getString("op");
-
-                //获取配置表：hbase维度表表名
-                String sinkTable = tp.getString("sink_table");
-                //获取配置表：hbase维度表表中列祖
-                String[] sinkFamily = tp.getString("sink_family").split(",");
-
-                if ("d".equals(op)){
-                    //从配置表：删除一条数据，hbase将对应的表删除
-                    boolean tableDeleted = hbaseUtils.deleteTable(sinkTable);
-
-                } else if("r".equals(op)||"c".equals(op)){
-                    //从配置表：添加一条数据，hbase将对应的表添加
-                    boolean tableCreated = hbaseUtils.createTable(Constant.HBASE_NAMESPACE, sinkTable, sinkFamily);
-
-                }else {
-                    //从配置表：修改一条数据，hbase将对应的表修改：先删除后添加
-                    boolean tableCreated = hbaseUtils.createTable(Constant.HBASE_NAMESPACE, sinkTable, sinkFamily);
-                    boolean tableDeleted = hbaseUtils.deleteTable(sinkTable);
-
-                }
-                return tp;
-            }
-        }).setParallelism(1);
-        return tpDS;
-    }
-    private static void deleteNotNeedColumns(JSONObject dataJsonObj, String sinkColumns) {
-        List<String> columnList = Arrays.asList(sinkColumns.split(","));
-
-        Set<Map.Entry<String, Object>> entrySet = dataJsonObj.entrySet();
-
-        entrySet.removeIf(entry-> !columnList.contains(entry.getKey()));
-
-    }
 }

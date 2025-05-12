@@ -31,7 +31,7 @@ public class TableProcessFunction extends BroadcastProcessFunction<JSONObject, J
     public void open(Configuration parameters) throws Exception {
         //将配置表中的配置信息预加载到程序configMap中
         Connection mySQLConnection = JdbcUtil.getMySQLConnection();
-        List<JSONObject> JSONObjectList = JdbcUtil.queryList(mySQLConnection, "select * from sx_002_v2.table_process_dim", JSONObject.class, true);
+        List<JSONObject> JSONObjectList = JdbcUtil.queryList(mySQLConnection, "select * from sx_004_v2.table_process_dim", JSONObject.class, true);
         for (JSONObject JSONObject : JSONObjectList) {
             configMap.put(JSONObject.getString("sourceTable"),JSONObject);
         }

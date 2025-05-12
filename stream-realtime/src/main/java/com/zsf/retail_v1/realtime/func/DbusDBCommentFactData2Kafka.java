@@ -3,6 +3,7 @@ package com.zsf.retail_v1.realtime.func;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.zsf.realtime.common.util.KafkaUtil;
+import com.zsf.realtime.common.util.KafkaUtils;
 import com.zsf.realtime.common.utils.DateTimeUtils;
 import com.zsf.realtime.common.utils.SensitiveWordsUtils;
 import lombok.SneakyThrows;
@@ -10,16 +11,18 @@ import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
-import org.apache.flink.streaming.api.datastream.*;
+import org.apache.flink.streaming.api.datastream.AsyncDataStream;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.KeyedStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.windowing.time.Time;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
-
-import com.zsf.realtime.common.util.KafkaUtils;
-import org.apache.flink.streaming.api.windowing.time.Time;
 
 /**
  * @Package com.zsf.retail_v1.realtime.func.DbusDBCommentFactData2Kafka

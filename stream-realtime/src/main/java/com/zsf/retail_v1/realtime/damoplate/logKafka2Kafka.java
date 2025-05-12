@@ -1,4 +1,4 @@
-package com.zsf.retail_v1.realtime.dwd;
+package com.zsf.retail_v1.realtime.damoplate;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
@@ -44,7 +44,7 @@ public class logKafka2Kafka {
         env.setParallelism(4);
 
         //kafka 读取数据
-        DataStreamSource<String> logStr = KafkaUtil.getKafkaSource(env, "topic_log_001", "topic_066");
+        DataStreamSource<String> logStr = KafkaUtil.getKafkaSource(env, "topic_log_002", "topic_067");
 
         //log：str --> obj
         SingleOutputStreamOperator<JSONObject> logObj = etl(logStr);
@@ -63,19 +63,19 @@ public class logKafka2Kafka {
 
     private static void writeToKafka(Map<String, DataStream<String>> streamMap) {
         DataStream<String> streamPAGE = streamMap.get(PAGE);
-        streamPAGE.addSink(KafkaUtil.getKafkaSink(Constant.TOPIC_DWD_TRAFFIC_PAGE));
+        streamPAGE.addSink(KafkaUtil.getKafkaSink("dwd_traffic_page_001"));
 
         DataStream<String> streamERR = streamMap.get(ERR);
-        streamERR.addSink(KafkaUtil.getKafkaSink(Constant.TOPIC_DWD_TRAFFIC_ERR));
+        streamERR.addSink(KafkaUtil.getKafkaSink("dwd_traffic_err_001"));
 
         DataStream<String> streamSTART = streamMap.get(START);
-        streamSTART.addSink(KafkaUtil.getKafkaSink(Constant.TOPIC_DWD_TRAFFIC_START));
+        streamSTART.addSink(KafkaUtil.getKafkaSink("dwd_traffic_start_001"));
 
         DataStream<String> streamDISPLAY = streamMap.get(DISPLAY);
-        streamDISPLAY.addSink(KafkaUtil.getKafkaSink(Constant.TOPIC_DWD_TRAFFIC_DISPLAY));
+        streamDISPLAY.addSink(KafkaUtil.getKafkaSink("dwd_traffic_display_001"));
 
         DataStream<String> streamACTION = streamMap.get(ACTION);
-        streamACTION.addSink(KafkaUtil.getKafkaSink(Constant.TOPIC_DWD_TRAFFIC_ACTION));
+        streamACTION.addSink(KafkaUtil.getKafkaSink("dwd_traffic_action_001"));
 
     }
     private static SingleOutputStreamOperator<JSONObject> etl(DataStreamSource<String> kafkaStrDS) {
