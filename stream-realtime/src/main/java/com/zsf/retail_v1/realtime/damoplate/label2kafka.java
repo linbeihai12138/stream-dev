@@ -31,7 +31,7 @@ import java.time.format.DateTimeFormatter;
  * @description:
  */
 public class label2kafka {
-    public static SingleOutputStreamOperator<JSONObject> removeSourceFields(SingleOutputStreamOperator<JSONObject> userInfoOutputDS1) {
+    public static SingleOutputStreamOperator<JSONObject> removeSourceFields(SideOutputDataStream<JSONObject> userInfoOutputDS1) {
         return userInfoOutputDS1.map(new MapFunction<JSONObject, JSONObject>() {
             @Override
             public JSONObject map(JSONObject jsonObject) throws Exception {
@@ -42,7 +42,7 @@ public class label2kafka {
             }
         });
     }
-    public static SingleOutputStreamOperator<JSONObject> assignTimestampsAndWatermarks(SideOutputDataStream<JSONObject> userInfoOutputDS) {
+    public static SingleOutputStreamOperator<JSONObject> assignTimestampsAndWatermarks(SingleOutputStreamOperator<JSONObject> userInfoOutputDS) {
         return userInfoOutputDS.assignTimestampsAndWatermarks(
                 WatermarkStrategy
                         .<JSONObject>forMonotonousTimestamps()
@@ -54,6 +54,8 @@ public class label2kafka {
                         })
         );
     }
+
+
     @SneakyThrows
     public static void main(String[] args) {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -61,72 +63,40 @@ public class label2kafka {
 
         DataStreamSource<String> kafkaSource = KafkaUtil.getKafkaSource(env, "topic_db_001", "label2kafka");
 
-        // 过滤出订单信息
-        final OutputTag<JSONObject> orderInfoJsonDS = new OutputTag<JSONObject>("order_info"){};
-        // 过滤出购物车信息
-        final OutputTag<JSONObject> cartInfoJsonDS = new OutputTag<JSONObject>("cart_info"){};
-        // 过滤出订单详情信息
-        final OutputTag<JSONObject> orderDetailJsonDS = new OutputTag<JSONObject>("order_detail"){};
-        // 过滤出评论信息
-        final OutputTag<JSONObject> commentInfoJsonDS = new OutputTag<JSONObject>("comment_info"){};
-        // 过滤出收藏信息
-        final OutputTag<JSONObject> favorInfoJsonDS = new OutputTag<JSONObject>("favor_info"){};
+        // 转json
+        SingleOutputStreamOperator<JSONObject> dbJsonDS1 = kafkaSource.map(JSONObject::parseObject);
+
+        // 水位线
+        SingleOutputStreamOperator<JSONObject> dbJsonDS2 = assignTimestampsAndWatermarks(dbJsonDS1);
+
         final OutputTag<JSONObject> userInfoSupMsgJsonDS = new OutputTag<JSONObject>("user_info_sup_msg"){};
         final OutputTag<JSONObject> userInfoJsonDS = new OutputTag<JSONObject>("user_info"){};
 
-        SingleOutputStreamOperator<Object> dbJsonDS = kafkaSource.map(JSON::parseObject).process(new ProcessFunction<JSONObject, Object>() {
+        SingleOutputStreamOperator<Object> dbJsonDS3 = dbJsonDS2.process(new ProcessFunction<JSONObject, Object>() {
             @Override
             public void processElement(JSONObject jsonObject, ProcessFunction<JSONObject, Object>.Context context, Collector<Object> collector) throws Exception {
                 String table = jsonObject.getJSONObject("source").getString("table");
-                if (table.equals("order_info")) {
-                    context.output(orderInfoJsonDS, jsonObject);
-                } else if (table.equals("order_detail")) {
-                    context.output(orderDetailJsonDS, jsonObject);
-                } else if (table.equals("cart_info")) {
-                    context.output(cartInfoJsonDS, jsonObject);
-                } else if (table.equals("comment_info")) {
-                    context.output(commentInfoJsonDS, jsonObject);
-                } else if (table.equals("favor_info")) {
-                    context.output(favorInfoJsonDS, jsonObject);
-                }else if (table.equals("user_info_sup_msg")) {
-                    context.output(userInfoSupMsgJsonDS, jsonObject);
-                }else if (table.equals("user_info")) {
-                    context.output(userInfoJsonDS, jsonObject);
+                if (table!=null){
+                    if (table.equals("user_info")) {
+                        context.output(userInfoJsonDS, jsonObject);
+                    } else if (table.equals("user_info_sup_msg")) {
+                        context.output(userInfoSupMsgJsonDS, jsonObject);
+                    }
+                    collector.collect(jsonObject);
                 }
-                collector.collect(jsonObject);
             }
         });
 
-        SideOutputDataStream<JSONObject> orderInfoOutputDS = dbJsonDS.getSideOutput(orderInfoJsonDS);
-        SideOutputDataStream<JSONObject> cartInfoOutputDS = dbJsonDS.getSideOutput(cartInfoJsonDS);
-        SideOutputDataStream<JSONObject> orderDetailOutputDS = dbJsonDS.getSideOutput(orderDetailJsonDS);
-        SideOutputDataStream<JSONObject> commentInfoOutputDS = dbJsonDS.getSideOutput(commentInfoJsonDS);
-        SideOutputDataStream<JSONObject> favorInfoOutputDS = dbJsonDS.getSideOutput(favorInfoJsonDS);
-        SideOutputDataStream<JSONObject> userInfoSupMsgOutputDS = dbJsonDS.getSideOutput(userInfoSupMsgJsonDS);
-        SideOutputDataStream<JSONObject> userInfoOutputDS = dbJsonDS.getSideOutput(userInfoJsonDS);
+        SideOutputDataStream<JSONObject> userInfoSupMsgOutputDS = dbJsonDS3.getSideOutput(userInfoSupMsgJsonDS);
+        SideOutputDataStream<JSONObject> userInfoOutputDS = dbJsonDS3.getSideOutput(userInfoJsonDS);
 
-
-        SingleOutputStreamOperator<JSONObject> orderInfoOutputDS1 = assignTimestampsAndWatermarks(orderInfoOutputDS);
-        SingleOutputStreamOperator<JSONObject> cartInfoOutputDS1 = assignTimestampsAndWatermarks(cartInfoOutputDS);
-        SingleOutputStreamOperator<JSONObject> orderDetailOutputDS1 = assignTimestampsAndWatermarks(orderDetailOutputDS);
-        SingleOutputStreamOperator<JSONObject> commentInfoOutputDS1 = assignTimestampsAndWatermarks(commentInfoOutputDS);
-        SingleOutputStreamOperator<JSONObject> favorInfoOutputDS1 = assignTimestampsAndWatermarks(favorInfoOutputDS);
-        SingleOutputStreamOperator<JSONObject> userInfoSupMsgOutputDS1 = assignTimestampsAndWatermarks(userInfoSupMsgOutputDS);
-        SingleOutputStreamOperator<JSONObject> userInfoOutputDS1 = assignTimestampsAndWatermarks(userInfoOutputDS);
-
-        // 对字段进行优化
-        SingleOutputStreamOperator<JSONObject> userInfoOutputDS2 = removeSourceFields(userInfoOutputDS1);
-        SingleOutputStreamOperator<JSONObject> userInfoSupMsgOutputDS2 = removeSourceFields(userInfoSupMsgOutputDS1);
-        SingleOutputStreamOperator<JSONObject> favorInfoOutputDS2 = removeSourceFields(favorInfoOutputDS1);
-        SingleOutputStreamOperator<JSONObject> commentInfoOutputDS2 = removeSourceFields(commentInfoOutputDS1);
-        SingleOutputStreamOperator<JSONObject> orderDetailOutputDS12 = removeSourceFields(orderDetailOutputDS1);
-        SingleOutputStreamOperator<JSONObject> cartInfoOutputDS2 = removeSourceFields(cartInfoOutputDS1);
-        SingleOutputStreamOperator<JSONObject> orderInfoOutputDS2 = removeSourceFields(orderInfoOutputDS1);
+        SingleOutputStreamOperator<JSONObject> userInfoOutputDS1 = removeSourceFields(userInfoOutputDS);
+        SingleOutputStreamOperator<JSONObject> userInfoSupMsgOutputDS1 = removeSourceFields(userInfoSupMsgOutputDS);
 
         // 异步io
-        SingleOutputStreamOperator<JSONObject> userInfo = userInfoOutputDS2
+        SingleOutputStreamOperator<JSONObject> userInfo = userInfoOutputDS1
                 .keyBy(o->o.getString("id"))
-                .intervalJoin(userInfoSupMsgOutputDS2.keyBy(o->o.getString("uid")))
+                .intervalJoin(userInfoSupMsgOutputDS1.keyBy(o->o.getString("uid")))
                 .between(Time.minutes(-30), Time.minutes(30))
                 .process(new ProcessJoinFunction<JSONObject, JSONObject, JSONObject>() {
                     @Override
