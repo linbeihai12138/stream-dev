@@ -1,4 +1,5 @@
 package com.zsf.retail_v1.realtime.damoplate;
+import java.time.LocalDate;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
@@ -143,7 +144,19 @@ public class label2kafka {
                             jsonObject1.put("user_info_sup_msg", jsonObject2);
                             String string = jsonObject1.getString("birthday");
                             String substring = string.substring(0,3);
+                            String substring1 = string.substring(0,4);
+
+                            // 获取年份
                             jsonObject1.put("nianDai", substring + "0");
+
+                            // 获取年龄
+                            jsonObject1.put("age", substring1);
+                            jsonObject1.put("age",LocalDate.now().getYear()-jsonObject1.getInteger("age"));
+
+                            // 获取性别
+                            if(jsonObject1.getString("gender")==null){
+                                jsonObject1.put("gender","H");
+                            }
                         }
                         collector.collect(jsonObject1);
 
