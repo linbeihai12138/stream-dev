@@ -1,6 +1,8 @@
 package com.zsf.retail_v1.realtime.damoplate;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Connection;
-import java.sql.Timestamp;
+import java.text.DecimalFormat;
 import java.time.LocalDate;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
@@ -8,35 +10,26 @@ import com.zsf.realtime.common.bean.DimBaseCategory;
 import com.zsf.realtime.common.bean.DimBaseCategory2;
 import com.zsf.realtime.common.constant.Constant;
 import com.zsf.realtime.common.func.FilterBloomDeduplicatorFunc;
-import com.zsf.realtime.common.util.ConfigUtils;
 import com.zsf.realtime.common.util.KafkaUtil;
 import com.zsf.realtime.common.utils.JdbcUtils;
 import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.MapFunction;
-import org.apache.flink.api.common.state.ValueState;
-import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.typeinfo.Types;
-import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
-import org.apache.flink.streaming.api.datastream.SideOutputDataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;;
 import org.apache.flink.streaming.api.functions.co.ProcessJoinFunction;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.util.Collector;
-import org.apache.flink.util.OutputTag;
-import java.time.LocalDate;
 import java.time.Period;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -298,7 +291,7 @@ public class label2kafka {
             }
         });
 
-        SingleOutputStreamOperator<JSONObject> orderDetail1 = orderInfoUpdDs
+        SingleOutputStreamOperator<JSONObject> orderDetail2 = orderInfoUpdDs
                 .keyBy(o->o.getString("order_id"))
                 .intervalJoin(orderDetailUpdDs.keyBy(o->o.getString("order_id")))
                 .between(Time.minutes(-30), Time.minutes(30))
@@ -310,6 +303,10 @@ public class label2kafka {
                         collector.collect(jsonObject1);
                     }
                 });
+
+        //通过布隆过滤器，去掉重复数据
+        SingleOutputStreamOperator<JSONObject> orderDetail1 = orderDetail2.keyBy(data -> data.getLong("order_id"))
+                .filter(new FilterBloomDeduplicatorFunc(1000000, 0.01));
 
 
         SingleOutputStreamOperator<JSONObject> orderInfos = orderDetail1.map(new MapDeviceAndSearchMarkModelFuncApi(dim_base_categories2, device_rate_weight_coefficient, search_rate_weight_coefficient));
@@ -337,10 +334,25 @@ public class label2kafka {
                 });
 
 
+        SingleOutputStreamOperator<JSONObject> logs1 = logs.map(new MapFunction<JSONObject, JSONObject>() {
+            @Override
+            public JSONObject map(JSONObject jsonObject) throws Exception {
+                String uid = jsonObject.getString("uid");
+                jsonObject.put("uid", uid.substring(0, 1));
+                jsonObject.put("ts_ms", jsonObject.getString("ts"));
+                return jsonObject;
+            }
+        }).assignTimestampsAndWatermarks(WatermarkStrategy.<JSONObject>forMonotonousTimestamps().withTimestampAssigner(new SerializableTimestampAssigner<JSONObject>() {
+            @Override
+            public long extractTimestamp(JSONObject jsonObject, long l) {
+                return jsonObject.getLongValue("ts_ms");
+            }
+        }));
+
         SingleOutputStreamOperator<JSONObject> user2 = user
                 .keyBy(o->o.getString("id"))
-                .intervalJoin(logs.keyBy(o->o.getString("uid")))
-                .between(Time.days(-1), Time.days(1))
+                .intervalJoin(logs1.keyBy(o->o.getString("uid")))
+                .between(Time.hours(-12), Time.hours(12))
                 .process(new ProcessJoinFunction<JSONObject, JSONObject, JSONObject>() {
                     @Override
                     public void processElement(JSONObject jsonObject1, JSONObject jsonObject2, ProcessJoinFunction<JSONObject, JSONObject, JSONObject>.Context context, Collector<JSONObject> collector) throws Exception {
@@ -350,12 +362,59 @@ public class label2kafka {
                         jsonObject1.put("sum_18~24",jsonObject1.getDoubleValue("sum_18~24") + jsonObject2.getDoubleValue("device_18_24") + + jsonObject2.getDoubleValue("search_18_24"));
                         jsonObject1.put("sum_35~39",jsonObject1.getDoubleValue("sum_35~39") + jsonObject2.getDoubleValue("search_35_39") + jsonObject2.getDoubleValue("device_35_39"));
                         jsonObject1.put("sum_30~34",jsonObject1.getDoubleValue("sum_30~34") + jsonObject2.getDoubleValue("search_30_34") + jsonObject2.getDoubleValue("device_30_34"));
-
                         collector.collect(jsonObject1);
                     }
                 });
-        user2.print();
+//        user2.print();
 
+        user2.map(new MapFunction<JSONObject, JSONObject>() {
+            @Override
+            public JSONObject map(JSONObject jsonObject) throws Exception {
+                long sum_18_24 = jsonObject.getLongValue("sum_18~24");
+                long sum_35_39 = jsonObject.getLongValue("sum_35~39");
+                long sum_25_29 = jsonObject.getLongValue("sum_25~29");
+                long sum_40_49 = jsonObject.getLongValue("sum_40~49");
+                long sum_50 = jsonObject.getLongValue("sum_50");
+                long sum_30_34 = jsonObject.getLongValue("sum_30~34");
+
+                double sum18_24 = roundToPrecision(sum_18_24, 3);
+                double sum35_39 = roundToPrecision(sum_35_39, 3);
+                double sum25_29 = roundToPrecision(sum_25_29, 3);
+                double sum40_49 = roundToPrecision(sum_40_49, 3);
+                double sum50 = roundToPrecision(sum_50, 3);
+                double sum30_34 = roundToPrecision(sum_30_34, 3);
+
+                ArrayList<String> list = new ArrayList<>();
+                list.add("18-24");
+                list.add("25-29");
+                list.add("30-34");
+                list.add("35-39");
+                list.add("40-49");
+                list.add("50以上");
+
+                ArrayList<Double> list2 = new ArrayList<>();
+                list2.add(sum18_24);
+                list2.add(sum25_29);
+                list2.add(sum30_34);
+                list2.add(sum35_39);
+                list2.add(sum40_49);
+                list2.add(sum50);
+
+                double maxValue2 = Collections.max(list2);
+
+                int index2 = list2.indexOf(maxValue2);
+
+                jsonObject.put("max_age", list.get(index2));
+                jsonObject.remove("sum_18~24");
+                jsonObject.remove("sum_35~39");
+                jsonObject.remove("sum_25~29");
+                jsonObject.remove("sum_40~49");
+                jsonObject.remove("sum_50");
+                jsonObject.remove("sum_30~34");
+
+                return jsonObject;
+            }
+        }).print();
         env.execute();
 
     }
@@ -379,5 +438,16 @@ public class label2kafka {
         else if (month == 9 || month == 10 && day <= 23) return "天秤座";
         else if (month == 10 || month == 11 && day <= 22) return "天蝎座";
         else return "射手座";
+    }
+    public static double roundToPrecision(double num, int precision) {
+        if (precision < 0) {
+            throw new IllegalArgumentException("精度不能为负数");
+        }
+
+        // 使用 Double.toString 避免浮点数精度问题
+        BigDecimal bd = new BigDecimal(Double.toString(num));
+        // 四舍五入到指定小数位数
+        bd = bd.setScale(precision, RoundingMode.HALF_UP);
+        return bd.doubleValue();
     }
 }

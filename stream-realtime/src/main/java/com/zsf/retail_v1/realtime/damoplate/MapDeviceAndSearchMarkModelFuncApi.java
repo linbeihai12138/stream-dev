@@ -111,45 +111,48 @@ public class MapDeviceAndSearchMarkModelFuncApi extends RichMapFunction<JSONObje
 
         switch (btname) {
             case "苹果":
-                json.put("search_18~24", round(0.9 * searchRate));
-                json.put("search_25~29", round(0.7 * searchRate));
-                json.put("search_30~34", round(0.5 * searchRate));
-                json.put("search_35~39", round(0.3 * searchRate));
-                json.put("search_40~49", round(0.2 * searchRate));
-                json.put("search_50", round(0.1    * searchRate));
+                json.put("search_18~24", round(0.9 * 0.2));
+                json.put("search_25~29", round(0.7 * 0.2));
+                json.put("search_30~34", round(0.5 * 0.2));
+                json.put("search_35~39", round(0.3 * 0.2));
+                json.put("search_40~49", round(0.2 * 0.2));
+                json.put("search_50", round(0.1    * 0.2));
                 break;
+            case "欧莱雅":
             case "香奈儿":
-                json.put("search_18~24", round(0.2 * searchRate));
-                json.put("search_25~29", round(0.4 * searchRate));
-                json.put("search_30~34", round(0.6 * searchRate));
-                json.put("search_35~39", round(0.7 * searchRate));
-                json.put("search_40~49", round(0.8 * searchRate));
-                json.put("search_50", round(0.8    * searchRate));
+                json.put("search_18~24", round(0.2 * 0.2));
+                json.put("search_25~29", round(0.4 * 0.2));
+                json.put("search_30~34", round(0.6 * 0.2));
+                json.put("search_35~39", round(0.7 * 0.2));
+                json.put("search_40~49", round(0.8 * 0.2));
+                json.put("search_50", round(0.8    * 0.2));
                 break;
 
-            case "家庭与育儿":
-                json.put("search_18~24", round(0.1 * searchRate));
-                json.put("search_25~29", round(0.2 * searchRate));
-                json.put("search_30~34", round(0.4 * searchRate));
-                json.put("search_35~39", round(0.6 * searchRate));
-                json.put("search_40~49", round(0.8 * searchRate));
-                json.put("search_50", round(0.7    * searchRate));
+            case "Redmi":
+            case "联想":
+                json.put("search_18~24", round(0.1 * 0.2));
+                json.put("search_25~29", round(0.2 * 0.2));
+                json.put("search_30~34", round(0.4 * 0.2));
+                json.put("search_35~39", round(0.6 * 0.2));
+                json.put("search_40~49", round(0.8 * 0.2));
+                json.put("search_50", round(0.7    * 0.2));
                 break;
-            case "科技与数码":
-                json.put("search_18~24", round(0.8 * searchRate));
-                json.put("search_25~29", round(0.6 * searchRate));
-                json.put("search_30~34", round(0.4 * searchRate));
-                json.put("search_35~39", round(0.3 * searchRate));
-                json.put("search_40~49", round(0.2 * searchRate));
-                json.put("search_50", round(0.1    * searchRate));
+            case "长粒香":
+            case "金沙河":
+                json.put("search_18~24", round(0.8 * 0.2));
+                json.put("search_25~29", round(0.6 * 0.2));
+                json.put("search_30~34", round(0.4 * 0.2));
+                json.put("search_35~39", round(0.3 * 0.2));
+                json.put("search_40~49", round(0.2 * 0.2));
+                json.put("search_50", round(0.1    * 0.2));
                 break;
             default:
-                json.put("search_18~24", round(0.4 * searchRate));
-                json.put("search_25~29", round(0.5 * searchRate));
-                json.put("search_30~34", round(0.6 * searchRate));
-                json.put("search_35~39", round(0.7 * searchRate));
-                json.put("search_40~49", round(0.8 * searchRate));
-                json.put("search_50", round(0.7    * searchRate));
+                json.put("search_18~24", round(0.4 * 0.2));
+                json.put("search_25~29", round(0.5 * 0.2));
+                json.put("search_30~34", round(0.6 * 0.2));
+                json.put("search_35~39", round(0.7 * 0.2));
+                json.put("search_40~49", round(0.8 * 0.2));
+                json.put("search_50", round(0.7    * 0.2));
                 break;
 
         }
@@ -157,45 +160,45 @@ public class MapDeviceAndSearchMarkModelFuncApi extends RichMapFunction<JSONObje
 
         switch (bcname) {
             case "时尚与潮流":
-                json.put("search1_18~24", round(0.9 * searchRate));
-                json.put("search1_25~29", round(0.7 * searchRate));
-                json.put("search1_30~34", round(0.5 * searchRate));
-                json.put("search1_35~39", round(0.3 * searchRate));
-                json.put("search1_40~49", round(0.2 * searchRate));
-                json.put("search1_50", round(0.1    * searchRate));
+                json.put("search1_18~24", round(0.9 * 0.3));
+                json.put("search1_25~29", round(0.7 * 0.3));
+                json.put("search1_30~34", round(0.5 * 0.3));
+                json.put("search1_35~39", round(0.3 * 0.3));
+                json.put("search1_40~49", round(0.2 * 0.3));
+                json.put("search1_50", round(0.1    * 0.3));
                 break;
             case "性价比":
-                json.put("search1_18~24", round(0.2 * searchRate));
-                json.put("search1_25~29", round(0.4 * searchRate));
-                json.put("search1_30~34", round(0.6 * searchRate));
-                json.put("search1_35~39", round(0.7 * searchRate));
-                json.put("search1_40~49", round(0.8 * searchRate));
-                json.put("search1_50", round(0.8    * searchRate));
+                json.put("search1_18~24", round(0.2 * 0.3));
+                json.put("search1_25~29", round(0.4 * 0.3));
+                json.put("search1_30~34", round(0.6 * 0.3));
+                json.put("search1_35~39", round(0.7 * 0.3));
+                json.put("search1_40~49", round(0.8 * 0.3));
+                json.put("search1_50", round(0.8    * 0.3));
                 break;
             case "健康与养生":
             case "家庭与育儿":
-                json.put("search1_18~24", round(0.1 * searchRate));
-                json.put("search1_25~29", round(0.2 * searchRate));
-                json.put("search1_30~34", round(0.4 * searchRate));
-                json.put("search1_35~39", round(0.6 * searchRate));
-                json.put("search1_40~49", round(0.8 * searchRate));
-                json.put("search1_50", round(0.7    * searchRate));
+                json.put("search1_18~24", round(0.1 * 0.3));
+                json.put("search1_25~29", round(0.2 * 0.3));
+                json.put("search1_30~34", round(0.4 * 0.3));
+                json.put("search1_35~39", round(0.6 * 0.3));
+                json.put("search1_40~49", round(0.8 * 0.3));
+                json.put("search1_50", round(0.7    * 0.3));
                 break;
             case "科技与数码":
-                json.put("search1_18~24", round(0.8 * searchRate));
-                json.put("search1_25~29", round(0.6 * searchRate));
-                json.put("search1_30~34", round(0.4 * searchRate));
-                json.put("search1_35~39", round(0.3 * searchRate));
-                json.put("search1_40~49", round(0.2 * searchRate));
-                json.put("search1_50", round(0.1    * searchRate));
+                json.put("search1_18~24", round(0.8 * 0.3));
+                json.put("search1_25~29", round(0.6 * 0.3));
+                json.put("search1_30~34", round(0.4 * 0.3));
+                json.put("search1_35~39", round(0.3 * 0.3));
+                json.put("search1_40~49", round(0.2 * 0.3));
+                json.put("search1_50", round(0.1    * 0.3));
                 break;
             case "学习与发展":
-                json.put("search1_18~24", round(0.4 * searchRate));
-                json.put("search1_25~29", round(0.5 * searchRate));
-                json.put("search1_30~34", round(0.6 * searchRate));
-                json.put("search1_35~39", round(0.7 * searchRate));
-                json.put("search1_40~49", round(0.8 * searchRate));
-                json.put("search1_50", round(0.7    * searchRate));
+                json.put("search1_18~24", round(0.4 * 0.3));
+                json.put("search1_25~29", round(0.5 * 0.3));
+                json.put("search1_30~34", round(0.6 * 0.3));
+                json.put("search1_35~39", round(0.7 * 0.3));
+                json.put("search1_40~49", round(0.8 * 0.3));
+                json.put("search1_50", round(0.7    * 0.3));
                 break;
             default:
                 json.put("search1_18~24", 0);
