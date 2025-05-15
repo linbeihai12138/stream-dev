@@ -1,12 +1,16 @@
 package com.zsf.retail_v1.realtime.damoplate;
+import java.sql.Connection;
 import java.sql.Timestamp;
 import java.time.LocalDate;
-
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.zsf.realtime.common.bean.DimBaseCategory;
+import com.zsf.realtime.common.bean.DimBaseCategory2;
 import com.zsf.realtime.common.constant.Constant;
 import com.zsf.realtime.common.func.FilterBloomDeduplicatorFunc;
+import com.zsf.realtime.common.util.ConfigUtils;
 import com.zsf.realtime.common.util.KafkaUtil;
+import com.zsf.realtime.common.utils.JdbcUtils;
 import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
@@ -18,20 +22,22 @@ import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
+import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.datastream.SideOutputDataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.co.ProcessJoinFunction;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
-
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /**
  * @Package com.zsf.retail_v1.realtime.damoplate.userlabel2kafka
@@ -40,7 +46,42 @@ import java.time.format.DateTimeFormatter;
  * @description:
  */
 public class label2kafka {
+    private static final List<DimBaseCategory> dim_base_categories;
+    private static final List<DimBaseCategory2> dim_base_categories2;
+    private static final Connection connection;
+    private static final double device_rate_weight_coefficient = 0.1; // 设备权重系数
+    private static final double search_rate_weight_coefficient = 0.15; // 搜索权重系数
 
+    static {
+        try {
+            connection = JdbcUtils.getMySQLConnection(
+                    Constant.MYSQL_URL,
+                    Constant.MYSQL_USER_NAME,
+                    Constant.MYSQL_PASSWORD);
+            String sql = "select b3.id,                          \n" +
+                    "            b3.name as b3name,              \n" +
+                    "            b2.name as b2name,              \n" +
+                    "            b1.name as b1name               \n" +
+                    "     from sx_004.base_category3 as b3  \n" +
+                    "     join sx_004.base_category2 as b2  \n" +
+                    "     on b3.category2_id = b2.id             \n" +
+                    "     join sx_004.base_category1 as b1  \n" +
+                    "     on b2.category1_id = b1.id";
+            dim_base_categories = JdbcUtils.queryList2(connection, sql, DimBaseCategory.class, false);
+
+            String sql2 = "select\n" +
+                    "    ki.id as id,\n" +
+                    "    kpd.base_category_name bcname,\n" +
+                    "    kpd.base_trademark_name as btname\n" +
+                    "from sx_004.sku_info ki\n" +
+                    "left join sx_003.hbase_kpb kpd\n" +
+                    "on ki.category3_id=kpd.base_category_id;";
+            dim_base_categories2 = JdbcUtils.queryList2(connection, sql2, DimBaseCategory2.class, false);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+    }
     @SneakyThrows
     public static void main(String[] args) {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -59,7 +100,7 @@ public class label2kafka {
                 }));
 
 
-        // 获取用户数据
+        // 获取用户数据 对字段进行筛选
         SingleOutputStreamOperator<JSONObject> dbJsonDS1 = kafkaJson
                 .filter(json->json.getJSONObject("source").getString("table").equals("user_info"))
                 .map(new MapFunction<JSONObject, JSONObject>() {
@@ -107,7 +148,7 @@ public class label2kafka {
                     }
                 });
 
-        // 获取用户详情数据
+        // 获取用户详情数据 对字段进行筛选
         SingleOutputStreamOperator<JSONObject> dbJsonDS2 = kafkaJson
                 .filter(json->json.getJSONObject("source").getString("table").equals("user_info_sup_msg"))
                 .map(new MapFunction<JSONObject, JSONObject>() {
@@ -130,10 +171,10 @@ public class label2kafka {
                 });
 
 
-        // intervalJoin
+        // user_info join user_info_sup_msg 对user_info 字段进行补充
         SingleOutputStreamOperator<JSONObject> userInfo = dbJsonDS1
                 .keyBy(o->o.getString("id"))
-                .intervalJoin(dbJsonDS2.keyBy(o->o.getString("uid")))
+                    .intervalJoin(dbJsonDS2.keyBy(o->o.getString("uid")))
                 .between(Time.minutes(-30), Time.minutes(30))
                 .process(new ProcessJoinFunction<JSONObject, JSONObject, JSONObject>() {
                     @Override
@@ -147,7 +188,6 @@ public class label2kafka {
                             result.put("unit_weight",jsonObject2.getString("unit_weight"));
                         }
                         collector.collect(result);
-
                     }
                 });
 
@@ -163,59 +203,159 @@ public class label2kafka {
                     }
                 }));
 
+        // 对日志数据中 字段进行 筛选： 设备信息 + 关键词搜索
         SingleOutputStreamOperator<JSONObject> logPageJsonDs = logJsonDs.map(new MapFunction<JSONObject, JSONObject>() {
             @Override
             public JSONObject map(JSONObject jsonObject) throws Exception {
-                JSONObject json = new JSONObject();
-                JSONObject page = jsonObject.getJSONObject("page");
-                JSONObject common = jsonObject.getJSONObject("common");
-                json.put("uid", common.getString("uid") == null ? "-1" : common.getString("uid"));
-                json.put("os", common.getString("os").split(" ")[0]);
-                json.put("ts", jsonObject.getLongValue("ts"));
-                json.put("item", page.getString("item"));
-                json.put("item_type", page.getString("item_type"));
-                return json;
+                JSONObject result = new JSONObject();
+                if (jsonObject.containsKey("common")){
+                    JSONObject common = jsonObject.getJSONObject("common");
+                    result.put("uid",common.getString("uid") != null ? common.getString("uid") : "-1");
+                    result.put("ts",jsonObject.getLongValue("ts"));
+                    JSONObject deviceInfo = new JSONObject();
+                    common.remove("sid");
+                    common.remove("mid");
+                    common.remove("is_new");
+                    deviceInfo.putAll(common);
+                    result.put("deviceInfo",deviceInfo);
+                    if(jsonObject.containsKey("page") && !jsonObject.getJSONObject("page").isEmpty()){
+                        JSONObject pageInfo = jsonObject.getJSONObject("page");
+                        if (pageInfo.containsKey("item_type") && pageInfo.getString("item_type").equals("keyword")){
+                            String item = pageInfo.getString("item");
+                            result.put("search_item",item);
+                        }
+                    }
+                }
+                JSONObject deviceInfo = result.getJSONObject("deviceInfo");
+                String os = deviceInfo.getString("os").split(" ")[0];
+                deviceInfo.put("os",os);
+
+                return result;
             }
         });
-        // 对日志数据进行去重
-        SingleOutputStreamOperator<JSONObject> logPageDuplicateDs = logPageJsonDs.keyBy(json -> json.getString("uid"))
-                .process(new LatestLogDeduplicator());
 
-        SingleOutputStreamOperator<JSONObject> userInfoLog = userInfo
+        //  对日志数据进行分组
+        KeyedStream<JSONObject, String> logPageKeyByJsonDs = logPageJsonDs.keyBy(json -> json.getString("uid"));
+
+//         通过ProcessFunction进行数据去重 或者通过布隆过滤器也可以实现
+        SingleOutputStreamOperator<JSONObject> logPageDuplicateJsonDs = logPageKeyByJsonDs.process(new ProcessFilterRepeatTsDataFunc());
+
+
+//         1 min 分钟窗口 实现了窗口内数据的去重，只保留最新状态
+        SingleOutputStreamOperator<JSONObject> LogPageReduceDuplicateJsonDs = logPageDuplicateJsonDs.keyBy(json -> json.getString("uid"))
+                .process(new AggregateUserDataProcessFunction())
+                .keyBy(json -> json.getString("uid"))
+                .window(TumblingProcessingTimeWindows.of(Time.minutes(1)))
+                .reduce((value1, value2) -> value2);
+
+
+        // 设备打分模型
+        SingleOutputStreamOperator<JSONObject> logs = LogPageReduceDuplicateJsonDs.map(new MapDeviceAndSearchMarkModelFunc(dim_base_categories, device_rate_weight_coefficient, search_rate_weight_coefficient));
+
+
+        // 订单数据
+        SingleOutputStreamOperator<JSONObject> orderInfoDs = kafkaJson
+                .filter(json -> json.getJSONObject("source").getString("table").equals("order_info"));
+
+        SingleOutputStreamOperator<JSONObject> orderInfoUpdDs = orderInfoDs.map(new MapFunction<JSONObject, JSONObject>() {
+            @Override
+            public JSONObject map(JSONObject jsonObject) throws Exception {
+                String op = jsonObject.getString("op");
+                JSONObject json = new JSONObject();
+                if (!op.equals("d")) {
+                    JSONObject after = jsonObject.getJSONObject("after");
+                    json.put("op", op);
+                    json.put("order_id", after.getString("id"));
+                    json.put("create_time", after.getString("create_time"));
+                    json.put("total_amount", after.getString("total_amount"));
+                    json.put("uid", after.getString("user_id"));
+                    json.put("ts_ms", jsonObject.getString("ts_ms"));
+                    return json;
+
+                }
+                return null;
+            }
+        });
+
+        SingleOutputStreamOperator<JSONObject> orderDetailDs = kafkaJson
+                .filter(json -> json.getJSONObject("source").getString("table").equals("order_detail"));
+
+        SingleOutputStreamOperator<JSONObject> orderDetailUpdDs = orderDetailDs.map(new MapFunction<JSONObject, JSONObject>() {
+            @Override
+            public JSONObject map(JSONObject jsonObject) throws Exception {
+                String op = jsonObject.getString("op");
+                JSONObject json = new JSONObject();
+                if (!op.equals("d")) {
+                    JSONObject after = jsonObject.getJSONObject("after");
+                    json.put("op", op);
+                    json.put("order_id", after.getString("order_id"));
+                    json.put("ts_ms", jsonObject.getString("ts_ms"));
+                    json.put("sku_id", after.getString("sku_id"));
+                    return json;
+
+                }
+                return null;
+            }
+        });
+
+        SingleOutputStreamOperator<JSONObject> orderDetail1 = orderInfoUpdDs
+                .keyBy(o->o.getString("order_id"))
+                .intervalJoin(orderDetailUpdDs.keyBy(o->o.getString("order_id")))
+                .between(Time.minutes(-30), Time.minutes(30))
+                .process(new ProcessJoinFunction<JSONObject, JSONObject, JSONObject>() {
+                    @Override
+                    public void processElement(JSONObject jsonObject1, JSONObject jsonObject2, ProcessJoinFunction<JSONObject, JSONObject, JSONObject>.Context context, Collector<JSONObject> collector) throws Exception {
+                        jsonObject1.put("sku_id",jsonObject2.getString("sku_id"));
+
+                        collector.collect(jsonObject1);
+                    }
+                });
+
+
+        SingleOutputStreamOperator<JSONObject> orderInfos = orderDetail1.map(new MapDeviceAndSearchMarkModelFuncApi(dim_base_categories2, device_rate_weight_coefficient, search_rate_weight_coefficient));
+
+//        orderInfos.print();
+//        logs.print();
+//        userInfo.print();
+
+        SingleOutputStreamOperator<JSONObject> user = userInfo
                 .keyBy(o->o.getString("id"))
-                .intervalJoin(logPageDuplicateDs.keyBy(o->o.getString("uid")))
+                .intervalJoin(orderInfos.keyBy(o->o.getString("uid")))
+                .between(Time.minutes(-30), Time.minutes(30))
+                .process(new ProcessJoinFunction<JSONObject, JSONObject, JSONObject>() {
+                    @Override
+                    public void processElement(JSONObject jsonObject1, JSONObject jsonObject2, ProcessJoinFunction<JSONObject, JSONObject, JSONObject>.Context context, Collector<JSONObject> collector) throws Exception {
+                        jsonObject1.put("sum_25~29",jsonObject2.getString("sum_25~29"));
+                        jsonObject1.put("sum_40~49",jsonObject2.getString("sum_40~49"));
+                        jsonObject1.put("sum_50",jsonObject2.getString("sum_50"));
+                        jsonObject1.put("sum_18~24",jsonObject2.getString("sum_18~24"));
+                        jsonObject1.put("sum_35~39",jsonObject2.getString("sum_35~39"));
+                        jsonObject1.put("sum_30~34",jsonObject2.getString("sum_30~34"));
+
+                        collector.collect(jsonObject1);
+                    }
+                });
+
+
+        SingleOutputStreamOperator<JSONObject> user2 = user
+                .keyBy(o->o.getString("id"))
+                .intervalJoin(logs.keyBy(o->o.getString("uid")))
                 .between(Time.days(-1), Time.days(1))
                 .process(new ProcessJoinFunction<JSONObject, JSONObject, JSONObject>() {
                     @Override
                     public void processElement(JSONObject jsonObject1, JSONObject jsonObject2, ProcessJoinFunction<JSONObject, JSONObject, JSONObject>.Context context, Collector<JSONObject> collector) throws Exception {
-                        JSONObject result = new JSONObject();
-                        if (jsonObject1.getString("id").equals(jsonObject2.getString("uid"))){
-                            result.putAll(jsonObject1);
-                            result.put("os",jsonObject2.getString("os"));
-                            result.put("item",jsonObject2.getString("item"));
-                        }
-                        collector.collect(result);
+                        jsonObject1.put("sum_25~29",jsonObject1.getDoubleValue("sum_25~29")+ jsonObject2.getDoubleValue("search_18_24") + jsonObject2.getDoubleValue("device_18_24"));
+                        jsonObject1.put("sum_40~49",jsonObject1.getDoubleValue("sum_40~49")+ jsonObject2.getDoubleValue("search_40_49") + jsonObject2.getDoubleValue("device_40_49"));
+                        jsonObject1.put("sum_50",jsonObject1.getDoubleValue("sum_50") + jsonObject2.getDoubleValue("search_50") + jsonObject2.getDoubleValue("device_50"));
+                        jsonObject1.put("sum_18~24",jsonObject1.getDoubleValue("sum_18~24") + jsonObject2.getDoubleValue("device_18_24") + + jsonObject2.getDoubleValue("search_18_24"));
+                        jsonObject1.put("sum_35~39",jsonObject1.getDoubleValue("sum_35~39") + jsonObject2.getDoubleValue("search_35_39") + jsonObject2.getDoubleValue("device_35_39"));
+                        jsonObject1.put("sum_30~34",jsonObject1.getDoubleValue("sum_30~34") + jsonObject2.getDoubleValue("search_30_34") + jsonObject2.getDoubleValue("device_30_34"));
 
+                        collector.collect(jsonObject1);
                     }
                 });
+        user2.print();
 
-        // 读取订单数据
-        SingleOutputStreamOperator<JSONObject> orderInfoJsonDs = kafkaJson
-                .filter(json -> json.getJSONObject("source").getString("table").equals("order_info"))
-                .map(new MapFunction<JSONObject, JSONObject>() {
-                    @Override
-                    public JSONObject map(JSONObject jsonObject) throws Exception {
-                        JSONObject result = new JSONObject();
-                        if (jsonObject.containsKey("after") && jsonObject.getJSONObject("after") != null) {
-                            JSONObject after = jsonObject.getJSONObject("after");
-                            result.put("order_id", after.getString("id"));
-                            result.put("total_amount", after.getString("total_amount"));
-                            result.put("uid", after.getString("user_id"));
-                        }
-                        return result;
-                    }
-                });
-        orderInfoJsonDs.print();
         env.execute();
 
     }
@@ -239,30 +379,5 @@ public class label2kafka {
         else if (month == 9 || month == 10 && day <= 23) return "天秤座";
         else if (month == 10 || month == 11 && day <= 22) return "天蝎座";
         else return "射手座";
-    }
-    public static class LatestLogDeduplicator extends KeyedProcessFunction<String, JSONObject, JSONObject> {
-        private transient ValueState<JSONObject> latestLogState;
-
-        @Override
-        public void open(Configuration parameters) throws Exception {
-            ValueStateDescriptor<JSONObject> descriptor = new ValueStateDescriptor<>(
-                    "latestLog",
-                    JSONObject.class
-            );
-            latestLogState = getRuntimeContext().getState(descriptor);
-        }
-        @Override
-        public void processElement(JSONObject jsonObject, KeyedProcessFunction<String, JSONObject, JSONObject>.Context ctx, Collector<JSONObject> out) throws Exception {
-            // 从 JSON 中获取长整型时间戳
-            long timestampLong = jsonObject.getLong("ts");
-            // 手动转换为 Timestamp 对象
-            Timestamp currentTimestamp = new Timestamp(timestampLong);
-            JSONObject latest = latestLogState.value();
-            // 比较时使用已转换的 Timestamp 对象
-            if (latest == null || currentTimestamp.after(new Timestamp(latest.getLong("ts")))) {
-                latestLogState.update(jsonObject);
-                out.collect(jsonObject);
-            }
-        }
     }
 }
